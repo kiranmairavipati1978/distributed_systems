@@ -1,12 +1,13 @@
 package org.dist.simplekafka1
 
 import com.google.common.annotations.VisibleForTesting
-import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
-import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, ZkClient}
+import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
 import org.dist.kvstore.JsonSerDes
 import org.dist.queue.server.Config
 import org.dist.queue.utils.ZKStringSerializer
 import org.dist.queue.utils.ZkUtils.Broker
+import org.dist.simplekafka.{Controller, ControllerExistsException}
 
 import scala.jdk.CollectionConverters._
 
@@ -59,4 +60,36 @@ class ZookeeperClient1(config: Config) {
     Option(result).map(_.asScala.toList)
   }
 
+  def subscribeControllerChangeListner(controller:Controller1): Unit = {
+    zkClient.subscribeDataChanges(ControllerPath, new ControllerChangeListner1(controller))
+  }
+
+  def tryCreatingControllerPath(controllerId: String): Unit = {
+    try {
+      createEphemeralPath(zkClient, ControllerPath, controllerId)
+    } catch {
+      case e:ZkNodeExistsException => {
+        val existingControllerId:String = zkClient.readData(ControllerPath)
+        throw new ControllerExistsException(existingControllerId)
+      }
+    }
+  }
+
+  def getAllBrokers(): Set[Broker] = {
+    zkClient.getChildren(BrokerIdsPath).asScala.map(brokerId => {
+      val data:String = zkClient.readData(getBrokerPath(brokerId.toInt))
+      JsonSerDes.deserialize(data.getBytes, classOf[Broker])
+    }).toSet
+  }
+
+  class ControllerChangeListner1(controller:Controller1) extends IZkDataListener {
+    override def handleDataChange(dataPath: String, data: Any): Unit = {
+      val existingControllerId:String = zkClient.readData(dataPath)
+      controller.setCurrent(existingControllerId.toInt)
+    }
+
+    override def handleDataDeleted(dataPath: String): Unit = {
+      controller.elect()
+    }
+  }
 }

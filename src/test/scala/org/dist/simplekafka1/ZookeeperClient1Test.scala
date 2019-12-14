@@ -27,16 +27,30 @@ class ZookeeperClient1Test extends ZookeeperTestHarness{
     val controller = new Controller1(zookeeperClient, config.brokerId)
     controller.startup()
 
-    // when
+    // When
     zookeeperClient.registerBroker(Broker(1, "10.10.10.11", 8001))
 
-    // then
+    // Then
     TestUtils.waitUntilTrue(() => {
       controller.liveBrokers.size == 2
     }, "Waiting for all brokers to get added", 1000)
 
     assert(controller.liveBrokers.size == 2)
-//    assert(zookeeperClient.getAllBrokerIds().contains(0));
   }
 
+  test("should be able to elect a leader") {
+    // Given
+    val config = new Config(9, new Networks().hostname(), TestUtils.choosePort(), zkConnect, List(TestUtils.tempDir().getAbsolutePath))
+    val zookeeperClient: ZookeeperClient1 = new ZookeeperClient1(config)
+    zookeeperClient.registerBroker(Broker(0, "10.10.10.10", 8080))
+    val controller = new Controller1(zookeeperClient, config.brokerId)
+
+    // When
+    controller.startup()
+
+    // Then
+    assert(controller.liveBrokers.size == 1)
+    assert(controller.currentLeader == 9)
+  }
+  
 }

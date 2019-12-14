@@ -12,7 +12,8 @@ import org.dist.queue.utils.ZkUtils.Broker
 class Controller(val zookeeperClient: ZookeeperClient, val brokerId: Int, socketServer: SimpleSocketServer) {
   val correlationId = new AtomicInteger(0)
   var liveBrokers: Set[Broker] = Set()
-  var currentLeader = -1
+  var currentLeader: Int = -1
+
   def startup(): Unit = {
     zookeeperClient.subscribeControllerChangeListner(this)
     elect()

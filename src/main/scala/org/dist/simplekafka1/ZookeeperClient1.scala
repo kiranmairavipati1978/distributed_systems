@@ -1,19 +1,19 @@
 package org.dist.simplekafka1
 
 import com.google.common.annotations.VisibleForTesting
-import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.dist.kvstore.JsonSerDes
 import org.dist.queue.server.Config
 import org.dist.queue.utils.ZKStringSerializer
 import org.dist.queue.utils.ZkUtils.Broker
+
 import scala.jdk.CollectionConverters._
 
 class ZookeeperClient1(config: Config) {
   val BrokerTopicsPath = "/brokers/topics"
   val BrokerIdsPath = "/brokers/ids"
   val ControllerPath = "/controller"
-
 
   private val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
 
@@ -47,6 +47,16 @@ class ZookeeperClient1(config: Config) {
 
   def getAllBrokerIds(): Set[Int] = {
     zkClient.getChildren(BrokerIdsPath).asScala.map(_.toInt).toSet
+  }
+
+  def getBrokerInfo(brokerId: Int): Broker = {
+    val data:String = zkClient.readData(getBrokerPath(brokerId))
+    JsonSerDes.deserialize(data.getBytes, classOf[Broker])
+  }
+
+  def subscribeBrokerChangeListener(listener: IZkChildListener): Option[List[String]] = {
+    val result = zkClient.subscribeChildChanges(BrokerIdsPath, listener)
+    Option(result).map(_.asScala.toList)
   }
 
 }

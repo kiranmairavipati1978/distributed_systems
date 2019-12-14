@@ -14,10 +14,6 @@ class BrokerChangeListner1(controller:Controller1, zookeeperClient:ZookeeperClie
       val newBrokers = newBrokerIds.map(zookeeperClient.getBrokerInfo(_))
 
       newBrokers.foreach(controller.addBroker(_))
-
-//      if (newBrokerIds.size > 0)
-//        controller.onBrokerStartup(newBrokerIds.toSeq)
-
     }
   }
 }

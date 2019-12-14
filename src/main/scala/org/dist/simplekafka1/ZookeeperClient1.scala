@@ -1,13 +1,14 @@
 package org.dist.simplekafka1
 
+import com.fasterxml.jackson.core.`type`.TypeReference
 import com.google.common.annotations.VisibleForTesting
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, ZkClient}
 import org.dist.kvstore.JsonSerDes
 import org.dist.queue.server.Config
 import org.dist.queue.utils.ZKStringSerializer
 import org.dist.queue.utils.ZkUtils.Broker
-import org.dist.simplekafka.{Controller, ControllerExistsException}
+import org.dist.simplekafka.{ControllerExistsException, PartitionReplicas}
 
 import scala.jdk.CollectionConverters._
 
@@ -80,6 +81,37 @@ class ZookeeperClient1(config: Config) {
       val data:String = zkClient.readData(getBrokerPath(brokerId.toInt))
       JsonSerDes.deserialize(data.getBytes, classOf[Broker])
     }).toSet
+  }
+
+  def setPartitionReplicasForTopic(topicName: String, partitionReplicas: Set[PartitionReplicas]) = {
+    val topicsPath = getTopicPath(topicName)
+    val topicsData = JsonSerDes.serialize(partitionReplicas)
+    createPersistentPath(zkClient, topicsPath, topicsData)
+  }
+
+  def createPersistentPath(client: ZkClient, path: String, data: String = ""): Unit = {
+    try {
+      client.createPersistent(path, data)
+    } catch {
+      case e: ZkNoNodeException => {
+        createParentPath(client, path)
+        client.createPersistent(path, data)
+      }
+    }
+  }
+
+  private def getTopicPath(topicName: String) = {
+    BrokerTopicsPath + "/" + topicName
+  }
+
+  @VisibleForTesting
+  def getAllTopics() = {
+    val topics = zkClient.getChildren(BrokerTopicsPath).asScala
+    topics.map(topicName => {
+      val partitionAssignments:String = zkClient.readData(getTopicPath(topicName))
+      val partitionReplicas:List[PartitionReplicas] = JsonSerDes.deserialize[List[PartitionReplicas]](partitionAssignments.getBytes, new TypeReference[List[PartitionReplicas]](){})
+      (topicName, partitionReplicas)
+    }).toMap
   }
 
   class ControllerChangeListner1(controller:Controller1) extends IZkDataListener {

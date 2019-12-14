@@ -52,5 +52,19 @@ class ZookeeperClient1Test extends ZookeeperTestHarness{
     assert(controller.liveBrokers.size == 1)
     assert(controller.currentLeader == 9)
   }
-  
+
+  test("should be elect a new leader when the controller node is deleted") {
+    // Given
+    val config = new Config(9, new Networks().hostname(), TestUtils.choosePort(), zkConnect, List(TestUtils.tempDir().getAbsolutePath))
+    val zookeeperClient: ZookeeperClient1 = new ZookeeperClient1(config)
+    zookeeperClient.registerBroker(Broker(0, "10.10.10.10", 8080))
+    val controller = new Controller1(zookeeperClient, config.brokerId)
+    controller.startup()
+
+    // When
+    zkClient.delete("/controller") // delete the controller node /controller/9
+
+    // Then
+    assert(controller.currentLeader == 9)
+  }
 }
